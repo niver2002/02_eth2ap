@@ -8,9 +8,9 @@ menu "Example Configuration"
 
     config EXAMPLE_WIFI_PASSWORD
         string "Wi-Fi Password"
-        default "12345678"
+        default ""
         help
-            Set the password of Wi-Fi ap interface.
+            Set the password of Wi-Fi ap interface. Leave empty for open network.
 
     config EXAMPLE_WIFI_CHANNEL
         int "WiFi channel"
