@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Unlicense OR CC0-1.0
  */
-/* eth2ap (Ethernet to Wi-Fi AP packet forwarding) Example
+/* sta2eth (Wi-Fi STA to Ethernet packet forwarding) Example
 
    This example code is in the Public Domain (or CC0 licensed, at your option.)
 
@@ -25,7 +25,7 @@
 #include "esp_private/wifi.h"
 #include "ethernet_init.h"
 
-static const char *TAG = "eth2ap_example";
+static const char *TAG = "sta2eth_example";
 static esp_eth_handle_t s_eth_handle = NULL;
 static QueueHandle_t flow_control_queue = NULL;
 static bool s_sta_is_connected = false;
@@ -41,7 +41,7 @@ typedef struct {
     uint16_t length;
 } flow_control_msg_t;
 
-// Forward packets from Wi-Fi to Ethernet
+// Forward packets from Wi-Fi STA to Ethernet
 static esp_err_t pkt_wifi2eth(void *buffer, uint16_t len, void *eb)
 {
     if (s_ethernet_is_connected) {
@@ -53,7 +53,7 @@ static esp_err_t pkt_wifi2eth(void *buffer, uint16_t len, void *eb)
     return ESP_OK;
 }
 
-// Forward packets from Ethernet to Wi-Fi
+// Forward packets from Ethernet to Wi-Fi STA
 // Note that, Ethernet works faster than Wi-Fi on ESP32,
 // so we need to add an extra queue to balance their speed difference.
 static esp_err_t pkt_eth2wifi(esp_eth_handle_t eth_handle, uint8_t *buffer, uint32_t len, void *priv)
@@ -71,7 +71,7 @@ static esp_err_t pkt_eth2wifi(esp_eth_handle_t eth_handle, uint8_t *buffer, uint
     return ret;
 }
 
-// This task will fetch the packet from the queue, and then send out through Wi-Fi.
+// This task will fetch the packet from the queue, and then send out through Wi-Fi STA.
 // Wi-Fi handles packets slower than Ethernet, we might add some delay between each transmitting.
 static void eth2wifi_flow_control_task(void *args)
 {
@@ -85,7 +85,7 @@ static void eth2wifi_flow_control_task(void *args)
                 do {
                     vTaskDelay(pdMS_TO_TICKS(timeout));
                     timeout += 2;
-                    res = esp_wifi_internal_tx(WIFI_IF_AP, msg.packet, msg.length);
+                    res = esp_wifi_internal_tx(WIFI_IF_STA, msg.packet, msg.length);
                 } while (res && timeout < FLOW_CONTROL_WIFI_SEND_TIMEOUT_MS);
                 if (res != ESP_OK) {
                     ESP_LOGE(TAG, "WiFi send packet failed: %d", res);
@@ -106,13 +106,10 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base,
         ESP_LOGI(TAG, "Ethernet Link Up");
         s_ethernet_is_connected = true;
         esp_eth_ioctl(s_eth_handle, ETH_CMD_G_MAC_ADDR, s_eth_mac);
-        esp_wifi_set_mac(WIFI_IF_AP, s_eth_mac);
-        ESP_ERROR_CHECK(esp_wifi_start());
         break;
     case ETHERNET_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "Ethernet Link Down");
         s_ethernet_is_connected = false;
-        ESP_ERROR_CHECK(esp_wifi_stop());
         break;
     case ETHERNET_EVENT_START:
         ESP_LOGI(TAG, "Ethernet Started");
@@ -129,23 +126,22 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base,
 static void wifi_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data)
 {
-    static uint8_t s_con_cnt = 0;
     switch (event_id) {
-    case WIFI_EVENT_AP_STACONNECTED:
-        ESP_LOGI(TAG, "Wi-Fi AP got a station connected");
-        if (!s_con_cnt) {
-            s_sta_is_connected = true;
-            esp_wifi_internal_reg_rxcb(WIFI_IF_AP, pkt_wifi2eth);
-        }
-        s_con_cnt++;
+    case WIFI_EVENT_STA_START:
+        ESP_LOGI(TAG, "Wi-Fi STA started, connecting to AP...");
+        esp_wifi_connect();
         break;
-    case WIFI_EVENT_AP_STADISCONNECTED:
-        ESP_LOGI(TAG, "Wi-Fi AP got a station disconnected");
-        s_con_cnt--;
-        if (!s_con_cnt) {
-            s_sta_is_connected = false;
-            esp_wifi_internal_reg_rxcb(WIFI_IF_AP, NULL);
-        }
+    case WIFI_EVENT_STA_CONNECTED:
+        ESP_LOGI(TAG, "Wi-Fi STA connected to AP");
+        s_sta_is_connected = true;
+        esp_wifi_internal_reg_rxcb(WIFI_IF_STA, pkt_wifi2eth);
+        break;
+    case WIFI_EVENT_STA_DISCONNECTED:
+        ESP_LOGI(TAG, "Wi-Fi STA disconnected from AP");
+        s_sta_is_connected = false;
+        esp_wifi_internal_reg_rxcb(WIFI_IF_STA, NULL);
+        ESP_LOGI(TAG, "Retrying to connect to the AP...");
+        esp_wifi_connect();
         break;
     default:
         break;
@@ -176,20 +172,18 @@ static void initialize_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
     wifi_config_t wifi_config = {
-        .ap = {
+        .sta = {
             .ssid = CONFIG_EXAMPLE_WIFI_SSID,
-            .ssid_len = strlen(CONFIG_EXAMPLE_WIFI_SSID),
             .password = CONFIG_EXAMPLE_WIFI_PASSWORD,
-            .max_connection = CONFIG_EXAMPLE_MAX_STA_CONN,
-            .authmode = WIFI_AUTH_WPA_WPA2_PSK,
-            .channel = CONFIG_EXAMPLE_WIFI_CHANNEL // default: channel 1
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
         },
     };
     if (strlen(CONFIG_EXAMPLE_WIFI_PASSWORD) == 0) {
-        wifi_config.ap.authmode = WIFI_AUTH_OPEN;
+        wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
     }
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
 }
 
 static esp_err_t initialize_flow_control(void)
