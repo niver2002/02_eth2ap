@@ -80,7 +80,7 @@ Replace `PORT` with your serial port (e.g., `/dev/ttyUSB0` on Linux or `COM3` on
 
 ### Step 1: Connect Ethernet
 
-Connect the ESP32-P4-NANO board to your router or switch using an Ethernet cable. Ensure the router has DHCP enabled.
+Connect the ESP32-P4-NANO board to your router or switch using an Ethernet cable. The router should have DHCP enabled as devices connecting via Wi-Fi will need to obtain IP addresses from the Ethernet network's DHCP server (the ESP32 itself does not run a DHCP server).
 
 ### Step 2: Power On
 
@@ -124,15 +124,15 @@ I (10258) eth2ap_example: Wi-Fi AP got a station connected
 
 ### Wi-Fi Sends Packet Failed
 
-If you see `WiFi send packet failed` errors, the issue is likely due to Ethernet processing packets faster than Wi-Fi. Try increasing `FLOW_CONTROL_WIFI_SEND_TIMEOUT_MS` in `main/ethernet_example_main.c`.
+If you see `WiFi send packet failed` errors, the issue is likely due to Ethernet processing packets faster than Wi-Fi. To fix this, increase the `FLOW_CONTROL_WIFI_SEND_TIMEOUT_MS` value in `main/ethernet_example_main.c` (line 37). Change the value from 100 to a higher number like 200 or 300 milliseconds.
 
 ### Flow Control Queue Issues
 
-If you see `send flow control message failed or timeout`, increase `FLOW_CONTROL_QUEUE_LENGTH` in `main/ethernet_example_main.c`.
+If you see `send flow control message failed or timeout`, you need to increase the queue size. Modify the `FLOW_CONTROL_QUEUE_LENGTH` value in `main/ethernet_example_main.c` (line 36) from 40 to a higher number like 60 or 80.
 
 ### No DHCP IP Assignment
 
-The ESP32 doesn't run a DHCP server in this example. Devices must obtain IP addresses from a DHCP server on the Ethernet network (typically your router). If your router doesn't have DHCP enabled, devices will need static IP addresses.
+The ESP32 doesn't run a DHCP server in this example - it acts as a transparent Layer 2 bridge. Devices connecting to the Wi-Fi AP must obtain IP addresses from the DHCP server on the Ethernet network (typically your router). If your router doesn't have DHCP enabled, connected devices will need to use manually assigned static IP addresses in the same subnet as your Ethernet network.
 
 ### Ethernet Link Not Up
 
