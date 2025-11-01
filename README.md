@@ -83,9 +83,9 @@ idf.py monitor
 
 项目使用以下ESP-IDF组件：
 
-- `espressif/esp_wifi_remote`: 版本0.15.0 - 处理WiFi远程控制
-- `espressif/esp_hosted`: 版本2.2.3 - 管理P4和C6之间的SDIO通信
-- `ethernet_init`: ESP-IDF示例中的以太网初始化组件
+- `espressif/esp_wifi_remote`: 版本^1.2.0 - 处理WiFi远程控制
+- `espressif/esp_hosted`: 版本^2.5.0 - 管理P4和C6之间的SDIO通信
+- `espressif/ethernet_init`: 版本^1.0.0 - 官方以太网初始化组件
 
 这些组件已经内置了P4和C6之间通过SDIO接口通信的所有必要控制逻辑，无需额外编写。
 
